@@ -9,9 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^3.0.20",
-    "@ai-sdk/openai": "^0.0.36",
-    "ai": "^3.3.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/groq": "^1.0.0",
+    "ai": "^4.0.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.3.8",
     "geist": "^1.7.0",
