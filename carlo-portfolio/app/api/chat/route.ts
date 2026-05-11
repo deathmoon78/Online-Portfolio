@@ -30,5 +30,5 @@ export async function POST(req: Request) {
     maxTokens: 600,
   });
 
-  return result.toAIStreamResponse();
+  return result.toDataStreamResponse();
 }
