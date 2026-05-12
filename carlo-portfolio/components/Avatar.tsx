@@ -10,67 +10,66 @@ interface AvatarProps {
   size?: number;
 }
 
-// ─── Frame map (Avatar2.mp4 — full 360° clockwise spin) ──────────────────────
+// ─── Frame map (manually verified) ───────────────────────────────────────────
+//  The video is a full 360° clockwise spin.
 //
-//  Frame   1  →  dead center, front-facing           (center)
-//  Frame  10  →  slight left turn, fully face-visible (our right)
-//  Frame  130  →  more left turn, still face-visible   (our right)
-//  Frame  48  →  full left side profile
-//  Frame  96  →  far left side (nearly back)
-//  Frame 144  →  right side profile
-//  Frame 180  →  slight right turn, face-visible      (our left)
-//  Frame 32  →  slight right glance, front-facing    (our left)
-//  Frame 192  →  dead center, front-facing            (center)
+//  Frame   1  →  dead center, front-facing
+//  Frame  32  →  turned to HIS right (mouse LEFT  → looks left  ✓)
+//  Frame 130  →  turned to HIS left  (mouse RIGHT → looks right ✓)
 //
-//  Front-facing arc we expose:
-//    mouse far LEFT  → frame 32  (avatar glances to our left  ✓)
-//    mouse CENTER    → frame   1  (avatar looks straight ahead ✓)
-//    mouse far RIGHT → frame  130  (avatar glances to our right ✓)
+//  The right arc (frame 1 → 130) goes BACKWARDS through the sequence:
+//    1 → 192 → 191 → ... → 130
+//  because going forwards (1 → 2 → ... → 130) passes through the back of head.
+//
+//  mouse LEFT   (0)   → frame  32   (via frames 32 → 1)
+//  mouse CENTER (0.5) → frame   1
+//  mouse RIGHT  (1)   → frame 130   (via frames 192 → 130)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const TOTAL_FRAMES = 192;
 const FRAME_PATH = (n: number) =>
   `/avatar-frames/frame_${String(n).padStart(4, "0")}.webp`;
 
-// Front-facing arc boundaries
-const LEFT_FRAME   = 32; // mouse all the way left  → this frame
-const CENTER_FRAME = 1;   // mouse centre            → this frame
-const RIGHT_FRAME  = 130;  // mouse all the way right → this frame
+const LEFT_FRAME   = 48;  // mouse far left
+const CENTER_FRAME = 1;   // mouse center
+const RIGHT_FRAME  = 130; // mouse far right (reached going backwards: 192→130)
 
-// Frames we actually need to preload (left arc + right arc + center)
+// Preload left arc (1–32) + right arc (130–192)
 const FRAMES_TO_LOAD = [
-  ...Array.from({ length: 130 }, (_, i) => i + 1),         // 1–130  (right arc)
-  ...Array.from({ length: 8  }, (_, i) => i + 32),        // 32–192 (left arc)
+  ...Array.from({ length: 48 }, (_, i) => i + 1),          // 1–32
+  ...Array.from({ length: 63 }, (_, i) => i + 130),         // 130–192
 ];
 
 function mouseXToFrame(mouseX: number, viewportW: number): number {
-  const ratio = Math.max(0, Math.min(1, mouseX / viewportW)); // 0 = left, 1 = right
+  const ratio = Math.max(0, Math.min(1, mouseX / viewportW)); // 0=left, 1=right
 
   if (ratio <= 0.5) {
-    // Left half of screen: interpolate from LEFT_FRAME → CENTER_FRAME
+    // Left half: frames go 32 → 1 as mouse moves left → center
     // ratio 0   → frame 32
     // ratio 0.5 → frame 1
-    const t = ratio / 0.5;
+    const t = ratio / 0.5; // 0→1
     return Math.round(LEFT_FRAME + t * (CENTER_FRAME - LEFT_FRAME));
   } else {
-    // Right half of screen: interpolate from CENTER_FRAME → RIGHT_FRAME
-    // ratio 0.5 → frame 1
+    // Right half: frames go 192 → 130 as mouse moves center → right
+    // We use 192 as the "center" anchor (same pose as frame 1) and go down to 130
+    // ratio 0.5 → frame 192 (≈ frame 1, front-facing)
     // ratio 1   → frame 130
-    const t = (ratio - 0.5) / 0.5;
-    return Math.round(CENTER_FRAME + t * (RIGHT_FRAME - CENTER_FRAME));
+    const t = (ratio - 0.5) / 0.5; // 0→1
+    return Math.round(TOTAL_FRAMES + t * (RIGHT_FRAME - TOTAL_FRAMES));
   }
 }
 
 export default function Avatar({ state, size = 160 }: AvatarProps) {
-  const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const frameRef   = useRef(CENTER_FRAME);
-  const rafRef     = useRef<number | null>(null);
-  const cacheRef   = useRef<Record<number, HTMLImageElement>>({});
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef  = useRef(CENTER_FRAME);
+  const rafRef    = useRef<number | null>(null);
+  const cacheRef  = useRef<Record<number, HTMLImageElement>>({});
   const [loaded, setLoaded] = useState(false);
 
   const isThinking = state === "thinking";
   const isReplying = state === "replying";
 
-  // ── Preload only front-facing frames ────────────────────────────────────────
+  // ── Preload frames ───────────────────────────────────────────────────────────
   useEffect(() => {
     let completed = 0;
     const total = FRAMES_TO_LOAD.length;
@@ -86,8 +85,8 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
     }
   }, []);
 
-  // ── Draw a frame onto the canvas ─────────────────────────────────────────────
-  // Source: 7130×1280 portrait. We crop to face region (top ~65%) for square fit.
+  // ── Draw frame onto canvas ───────────────────────────────────────────────────
+  // Source: 720×1280 portrait — crop top 65% to get face + shoulders in square
   const drawFrame = useCallback((n: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -96,20 +95,20 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
     const img = cacheRef.current[n];
     if (!img || !img.complete || img.naturalWidth === 0) return;
 
-    const srcW = img.naturalWidth;           // 7130
-    const srcH = img.naturalHeight;          // 1280
-    const cropH = Math.round(srcH * 0.65);  // top 65% = face + shoulders
+    const srcW  = img.naturalWidth;
+    const srcH  = img.naturalHeight;
+    const cropH = Math.round(srcH * 0.65);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, srcW, cropH, 0, 0, canvas.width, canvas.height);
   }, []);
 
-  // ── Draw center frame once loaded ───────────────────────────────────────────
+  // ── Draw center frame once loaded ────────────────────────────────────────────
   useEffect(() => {
     if (loaded) drawFrame(CENTER_FRAME);
   }, [loaded, drawFrame]);
 
-  // ── Mouse / touch tracking ──────────────────────────────────────────────────
+  // ── Mouse + touch tracking ───────────────────────────────────────────────────
   useEffect(() => {
     if (!loaded) return;
 
@@ -141,7 +140,7 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
     };
   }, [loaded, drawFrame]);
 
-  // ── Redraw when state changes (keeps current frame) ─────────────────────────
+  // ── Redraw on state change ───────────────────────────────────────────────────
   useEffect(() => {
     if (loaded) drawFrame(frameRef.current);
   }, [state, loaded, drawFrame]);
@@ -160,7 +159,7 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
       transition={
         state === "idle"
           ? { duration: 4, repeat: Infinity, ease: "easeInOut" }
-          : { type: "spring", stiffness: 1130, damping: 14 }
+          : { type: "spring", stiffness: 120, damping: 14 }
       }
     >
       {/* Glow ring */}
@@ -180,7 +179,7 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
         transition={{ duration: 1.5, repeat: isThinking ? Infinity : 0 }}
       />
 
-      {/* Circular frame canvas */}
+      {/* Circular canvas */}
       <div
         className="w-full h-full rounded-full overflow-hidden"
         style={{
@@ -188,13 +187,12 @@ export default function Avatar({ state, size = 160 }: AvatarProps) {
           boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
         }}
       >
-        {/* Shimmer while preloading */}
         {!loaded && (
           <div
             className="w-full h-full"
             style={{
               background: "linear-gradient(90deg,#111 25%,#1c1c1c 50%,#111 75%)",
-              backgroundSize: "1300% 100%",
+              backgroundSize: "200% 100%",
               animation: "shimmer 1.5s linear infinite",
             }}
           />
