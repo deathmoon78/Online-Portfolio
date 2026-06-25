@@ -20,11 +20,7 @@ export async function POST(req: Request) {
     : createOpenAI({
         apiKey: process.env.OPENAI_API_KEY!,
       });
-  console.log("OPENAI exists:", !!process.env.OPENAI_API_KEY);
-
-  return Response.json({
-    hasKey: !!process.env.OPENAI_API_KEY,
-  });
+  console.log("GROQ exists:", !!process.env.GROQ_API_KEY);
 
   const model = useGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
 
