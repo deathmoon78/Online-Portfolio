@@ -6,31 +6,28 @@ export const runtime = "edge";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
-  
+  try {
+    const { messages } = await req.json();
 
-  // Support both Groq (via OpenAI-compatible) and OpenAI
-  const useGroq = !!process.env.GROQ_API_KEY;
+    const client = createOpenAI({
+      baseURL: "https://api.groq.com/openai/v1",
+      apiKey: process.env.GROQ_API_KEY!,
+    });
 
-  const client = useGroq
-    ? createOpenAI({
-        baseURL: "https://api.groq.com/openai/v1",
-        apiKey: process.env.GROQ_API_KEY!,
-      })
-    : createOpenAI({
-        apiKey: process.env.OPENAI_API_KEY!,
-      });
-  console.log("GROQ exists:", !!process.env.GROQ_API_KEY);
+    const result = await streamText({
+      model: client("llama-3.3-70b-versatile"),
+      system: SYSTEM_PROMPT,
+      messages,
+      temperature: 0.8,
+      maxTokens: 600,
+    });
 
-  const model = useGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
+    return result.toDataStreamResponse();
+  } catch (error) {
+    console.error("FULL ERROR:", error);
 
-  const result = await streamText({
-    model: client(model),
-    system: SYSTEM_PROMPT,
-    messages,
-    temperature: 0.8,
-    maxTokens: 600,
-  });
-
-  return result.toDataStreamResponse();
+    return Response.json({
+      error: String(error),
+    });
+  }
 }
