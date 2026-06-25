@@ -6,8 +6,11 @@ export const runtime = "edge";
 export const maxDuration = 30;
 
 export async function POST() {
+  console.log("TEST ROUTE HIT");
+
   return Response.json({
     success: true,
-    message: "API route works",
+    message: "TEST ROUTE HIT",
+    timestamp: Date.now(),
   });
 }
