@@ -5,33 +5,32 @@ import { SYSTEM_PROMPT } from "@/lib/prompt";
 export const runtime = "edge";
 export const maxDuration = 30;
 
-export async function POST() {
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "user",
-            content: "Say hello",
-          },
-        ],
-      }),
-    }
-  );
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  
 
-  const data = await response.json();
+  // Support both Groq (via OpenAI-compatible) and OpenAI
+  const useGroq = !!process.env.GROQ_API_KEY;
 
-  console.log(data);
-  console.log(
-  process.env.GROQ_API_KEY?.slice(0, 8)
-);
+  const client = useGroq
+    ? createOpenAI({
+        baseURL: "https://api.groq.com/openai/v1",
+        apiKey: process.env.GROQ_API_KEY!,
+      })
+    : createOpenAI({
+        apiKey: process.env.OPENAI_API_KEY!,
+      });
+  console.log("GROQ exists:", !!process.env.GROQ_API_KEY);
 
-  return Response.json(data);
+  const model = useGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
+
+  const result = await streamText({
+    model: client(model),
+    system: SYSTEM_PROMPT,
+    messages,
+    temperature: 0.8,
+    maxTokens: 600,
+  });
+
+  return result.toDataStreamResponse();
 }
