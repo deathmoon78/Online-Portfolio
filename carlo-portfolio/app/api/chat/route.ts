@@ -29,6 +29,9 @@ export async function POST() {
   const data = await response.json();
 
   console.log(data);
+  console.log(
+  process.env.GROQ_API_KEY?.slice(0, 8)
+);
 
   return Response.json(data);
 }
