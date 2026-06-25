@@ -17,13 +17,15 @@ export async function POST(req: Request) {
   });
   console.log("3. Client created");
 
-  const result = await streamText({
-    model: client("llama-3.3-70b-versatile"),
-    system: SYSTEM_PROMPT,
-    messages,
-  });
+  const result = streamText({
+  model: client("llama-3.3-70b-versatile"),
+  system: SYSTEM_PROMPT,
+  messages,
+});
 
-  console.log("4. streamText completed");
+const text = await result.text;
 
-  return result.toDataStreamResponse();
+console.log("Generated text:", text);
+
+return Response.json({ text });
 }
