@@ -7,6 +7,7 @@ export const maxDuration = 30;
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
+  
 
   // Support both Groq (via OpenAI-compatible) and OpenAI
   const useGroq = !!process.env.GROQ_API_KEY;
@@ -19,6 +20,11 @@ export async function POST(req: Request) {
     : createOpenAI({
         apiKey: process.env.OPENAI_API_KEY!,
       });
+  console.log("OPENAI exists:", !!process.env.OPENAI_API_KEY);
+
+  return Response.json({
+    hasKey: !!process.env.OPENAI_API_KEY,
+  });
 
   const model = useGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
 
